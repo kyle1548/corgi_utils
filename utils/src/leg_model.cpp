@@ -8,7 +8,7 @@
 
 #include "../include/fitted_coefficient.hpp"
 #include <chrono>
-#include <Eigen/Dense>
+// #include <Eigen/Dense>
 
 
 class LegModel {
@@ -235,15 +235,15 @@ int main() {
     // Note: The contact_map function and other advanced features are not fully implemented in this example.
 
 
-    Eigen::VectorXd a(5);
-    Eigen::VectorXd b(5);
-    Eigen::VectorXd result(5);
+    // Eigen::VectorXd a(5);
+    // Eigen::VectorXd b(5);
+    // Eigen::VectorXd result(5);
 
-    // 初始化向量
-    a << 1.0, 2.0, 3.0, 4.0, 5.0;
+    // // 初始化向量
+    // a << 1.0, 2.0, 3.0, 4.0, 5.0;
 
-    b << 5.0, 4.0, 3.0, 2.0, 1.0;
-    a << 5.0, 2.0, 3.0, 4.0, 5.0;
-    std::cout << a ;
+    // b << 5.0, 4.0, 3.0, 2.0, 1.0;
+    // a << 5.0, 2.0, 3.0, 4.0, 5.0;
+    // std::cout << a ;
     return 0;
 }

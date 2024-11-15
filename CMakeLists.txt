@@ -13,6 +13,6 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE INTERNAL "")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/build)
 find_package(Eigen3 3.3 REQUIRED NO_MODULE)
-# include(${CMAKE_CURRENT_LIST_DIR}/cmake/common.cmake)
+
 
 add_subdirectory(utils/src)
