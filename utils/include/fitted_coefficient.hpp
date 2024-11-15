@@ -31,40 +31,40 @@ const std::vector<double> inv_L_dist_coef = {0.2953054355683213, 11.024121222923
 
 /* polynomial class */
 class polynomial {
-public:
-    std::vector<double> coef; // Coefficients
+    public:
+        std::vector<double> coef; // Coefficients
 
-    polynomial(const std::vector<double>& c) : coef(c) {}
+        polynomial(const std::vector<double>& c) : coef(c) {}
 
-    // Evaluate the polynomial at x
-    double operator()(double x) const {
-        double result = 0.0;
-        double power = 1.0;
-        for (double c : coef) {
-            result += c * power;
-            power *= x;
+        // Evaluate the polynomial at x
+        double operator()(double x) const {
+            double result = 0.0;
+            double power = 1.0;
+            for (double c : coef) {
+                result += c * power;
+                power *= x;
+            }
+            return result;
         }
-        return result;
-    }
 
-    // Unary minus operator
-    polynomial operator-() const {
-        std::vector<double> neg_coef(coef.size());
-        for (size_t i = 0; i < coef.size(); ++i)
-            neg_coef[i] = -coef[i];
-        return polynomial(neg_coef);
-    }
-
-    // Compute the derivative polynomial
-    polynomial derivative() const {
-        if (coef.size() <= 1)
-            return polynomial({0}); // Derivative of constant is zero
-        std::vector<double> deriv_coef(coef.size() - 1);
-        for (size_t i = 1; i < coef.size(); ++i) {
-            deriv_coef[i - 1] = coef[i] * i;
+        // Unary minus operator
+        polynomial operator-() const {
+            std::vector<double> neg_coef(coef.size());
+            for (size_t i = 0; i < coef.size(); ++i)
+                neg_coef[i] = -coef[i];
+            return polynomial(neg_coef);
         }
-        return polynomial(deriv_coef);
-    }
+
+        // Compute the derivative polynomial
+        polynomial derivative() const {
+            if (coef.size() <= 1)
+                return polynomial({0}); // Derivative of constant is zero
+            std::vector<double> deriv_coef(coef.size() - 1);
+            for (size_t i = 1; i < coef.size(); ++i) {
+                deriv_coef[i - 1] = coef[i] * i;
+            }
+            return polynomial(deriv_coef);
+        }
 };
 
 /* Polynomial */
