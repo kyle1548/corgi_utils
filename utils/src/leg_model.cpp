@@ -20,7 +20,7 @@ class LegModel {
         void forward(double theta, double beta);
 
         // Inverse kinematics (partial implementation)
-        std::pair<double, double> inverse(const std::pair<double, double>& pos, const std::string& joint = "G");
+        void inverse(const double pos[2], const std::string &joint = "G", bool forward = true);
 
         // Move function (partial implementation)
         std::pair<double, double> move(double theta, double beta, const std::pair<double, double>& move_vec, bool contact_upper = true);
@@ -28,6 +28,10 @@ class LegModel {
 
         // Joint Positions
         std::array<double, 2> A_l, A_r, B_l, B_r, C_l, C_r, D_l, D_r, E, F_l, F_r, G, H_l, H_r, U_l, U_r, L_l, L_r;
+
+        // Current theta and beta
+        double theta;
+        double beta;
 
     private:
         // Joint Positions in complex
@@ -52,10 +56,6 @@ class LegModel {
         double ang_BCF;
         double ang_DBC;
         double ang_OGF;
-
-        // Current theta and beta
-        double theta;
-        double beta;
 
         // Helper functions
         void calculate();
@@ -125,7 +125,6 @@ void LegModel::forward(double theta_in, double beta_in) {
 
 void LegModel::calculate() {
     using namespace std::complex_literals; // For 1i
-    
     // Forward kinematics calculations
     A_l_c = l1 * std::exp(1i * theta);
     B_l_c = R * std::exp(1i * theta);
@@ -142,7 +141,6 @@ void LegModel::calculate() {
     U_l_c = B_l_c + (C_l_c - B_l_c) * std::exp(1i * ang_UBC) * (R / l3);
     L_l_c = F_l_c + (G_c - F_l_c) * std::exp(1i * ang_LFG) * (R / l8);
     H_l_c = U_l_c + (B_l_c - U_l_c) * std::exp(-1i * theta0);
-
     symmetry();
 }
 
@@ -161,7 +159,6 @@ void LegModel::symmetry() {
 void LegModel::rotate() {
     using namespace std::complex_literals;
     std::complex<double> rot_ang = std::exp(1i * (beta + beta0));
-
     // Rotate positions
     A_l_c *= rot_ang;
     A_r_c *= rot_ang;
@@ -206,6 +203,42 @@ void LegModel::to_vector() {
 
 // Note: The inverse and move functions require root-finding and numerical methods that are complex to implement.
 // For a complete implementation, you would need to use numerical libraries like Eigen, Ceres Solver, or write custom solvers.
+void LegModel::inverse(const double pos[2], const std::string &joint, bool forward) {
+        using namespace std::complex_literals;
+        double abs_pos = std::sqrt(pos[0]*pos[0] + pos[1]*pos[1]);
+        if (joint == "G"){
+            theta = inv_G_dist_poly(abs_pos);
+            beta = std::atan2(pos[1], pos[0]) - std::atan2(-abs_pos, 0);    // atan2(y, x)
+        } else if (joint == "Ul" || joint == "Ur"){
+            theta = inv_U_dist_poly(abs_pos);
+            double U_x_beta0, U_y_beta0;
+            if (joint == "Ul"){
+                U_x_beta0 = U_l_poly[0](theta);
+                U_y_beta0 = U_l_poly[1](theta);
+            } else {    // Ur
+                U_x_beta0 = U_r_poly[0](theta);
+                U_y_beta0 = U_r_poly[1](theta);    
+            }//end if else
+            beta = std::atan2(pos[1], pos[0]) - std::atan2(U_y_beta0, U_x_beta0);    // atan2(y, x)
+        } else if (joint == "Ll" || joint == "Lr"){
+            theta = inv_L_dist_poly(abs_pos);
+            double L_x_beta0, L_y_beta0;
+            if (joint == "Ll"){
+                L_x_beta0 = L_l_poly[0](theta);
+                L_y_beta0 = L_l_poly[1](theta);
+            } else {    // Lr
+                L_x_beta0 = L_r_poly[0](theta);
+                L_y_beta0 = L_r_poly[1](theta);  
+            }//end if else            
+            beta = std::atan2(pos[1], pos[0]) - std::atan2(L_y_beta0, L_x_beta0);    // atan2(y, x)
+        } else {
+            throw std::runtime_error("joint needs to be 'G', 'Ul', 'Ur', 'Ll', or 'Lr'.");
+        }//end if else
+        if (forward) {
+            this->forward(theta, beta);
+        }
+}//end inverse
+
 
 int main() {
     LegModel legmodel(true);
@@ -218,7 +251,7 @@ int main() {
     // Single input
     std::cout << "==========Single Input==========\n";
     double theta = M_PI * 130.0 / 180.0;
-    double beta = M_PI;
+    double beta =  M_PI * 50.0 / 180.0;
 
     auto start = std::chrono::high_resolution_clock::now();
     for (int i=0; i<1000000; i++){
@@ -234,6 +267,34 @@ int main() {
 
     // Note: The contact_map function and other advanced features are not fully implemented in this example.
 
+    /* Inverse kinematics */
+    std::cout << "\n";
+    std::cout << "****************************************" << std::endl;
+    std::cout << "****** Inverse kinematics example ******" << std::endl;
+    std::cout << "****************************************" << std::endl;
+    // inverse for G
+    std::cout << "==========Inverse for G==========" << std::endl;
+    double G_p[2] = {0.05, -0.25};
+    std::cout << "Input G: " << G_p[0] << ", " << G_p[1] << std::endl;
+    legmodel.inverse(G_p, "G");
+    std::cout << "Output theta, beta (degree): " << legmodel.theta*180.0/M_PI << ", "<< legmodel.beta*180.0/M_PI << std::endl;
+    std::cout << "Output G: " << legmodel.G[0] << ", " << legmodel.G[1] << std::endl;
+    // inverse for left upper rim
+    std::cout << "==========Inverse for U_l==========" << std::endl;
+    double Ul_p[2] = {-0.01, -0.015};
+    std::cout << "Input U_l: " << Ul_p[0] << ", " << Ul_p[1] << std::endl;
+    legmodel.inverse(Ul_p, "Ul");
+    std::cout << "Output theta, beta (degree): " << legmodel.theta*180.0/M_PI << ", "<< legmodel.beta*180.0/M_PI << std::endl;
+    std::cout << "Output U_l: " << legmodel.U_l[0] << ", " << legmodel.U_l[1] << std::endl;
+    // inverse for right lower rim
+    std::cout << "==========Inverse for L_r==========" << std::endl;
+    double Lr_p[2] = {-0.01, -0.015};
+    std::cout << "Input L_r: " << Lr_p[0] << ", " << Lr_p[1] << std::endl;
+    legmodel.inverse(Lr_p, "Lr");
+    std::cout << "Output theta, beta (degree): " << legmodel.theta*180.0/M_PI << ", "<< legmodel.beta*180.0/M_PI << std::endl;
+    std::cout << "Output L_r: " << legmodel.L_r[0] << ", " << legmodel.L_r[1] << std::endl;
+
+
 
     // Eigen::VectorXd a(5);
     // Eigen::VectorXd b(5);
@@ -245,5 +306,21 @@ int main() {
     // b << 5.0, 4.0, 3.0, 2.0, 1.0;
     // a << 5.0, 2.0, 3.0, 4.0, 5.0;
     // std::cout << a ;
+
+
+    
+    auto start2 = std::chrono::high_resolution_clock::now();
+    double angle;
+    for (int i=0; i<10000000; i++){
+        // angle = std::arg(std::complex<double>(1, 5) / std::complex<double>(0, -5));
+        angle = std::atan2(5, 1) - std::atan2(-5, 0);
+    }
+    auto end2 = std::chrono::high_resolution_clock::now();
+    // 計算執行時間，並轉換成毫秒
+    auto duration2 = std::chrono::duration_cast<std::chrono::milliseconds>(end2 - start2);
+    std::cout << "angle: " << angle  << ","<<std::atan2(5, 1) << ","<< std::atan2(-5, 0) << std::endl;
+    std::cout << "time: " << duration2.count() << " ms" << std::endl;
+
+
     return 0;
 }

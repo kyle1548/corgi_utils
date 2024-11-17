@@ -9,7 +9,6 @@
                 "-g",
                 "${file}",
                 "-o",
-                "-I D:\\install\\eigen-3.4.0",
                 "${fileDirname}\\${fileBasenameNoExtension}.exe"
             ],
             "options": {
