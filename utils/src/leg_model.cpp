@@ -344,7 +344,7 @@ std::array<double, 2> LegModel::move(double theta_in, double beta_in, const std:
     // Use optimization solver to find d_theta and d_beta (analogous to fsolve)
     std::array<double, 2> guess_dq = {0.0, 0.0};    // d_theta, d_beta / initial guess = (0, 0)
     for (size_t iter = 0; iter < max_iter; ++iter) {
-        std::array<double, 2> cost = legmodel.objective(guess_dq, {theta_in, beta_in}, move_vec, contact_rim);     // 计算当前函数值
+        std::array<double, 2> cost = this->objective(guess_dq, {theta_in, beta_in}, move_vec, contact_rim);     // 计算当前函数值
         Eigen::Vector2d cost_vec(cost[0], cost[1]);
 
         double norm_cost = cost_vec.norm();          // 计算残差范数
@@ -359,14 +359,14 @@ std::array<double, 2> LegModel::move(double theta_in, double beta_in, const std:
         for (size_t i = 0; i < 2; ++i) {
             std::array<double, 2> dq_eps = guess_dq;
             dq_eps[i] += epsilon;  // 对第 i 个变量加一个小扰动
-            std::array<double, 2> cost_eps = legmodel.objective(dq_eps, {theta_in, beta_in}, move_vec, contact_rim);
+            std::array<double, 2> cost_eps = this->objective(dq_eps, {theta_in, beta_in}, move_vec, contact_rim);
             Eigen::Vector2d cost_eps_vec(cost_eps[0], cost_eps[1]);
             Jac.col(i) = (cost_eps_vec - cost_vec) / epsilon;  // 数值差分计算导数
         }//end for
 
         Eigen::Vector2d dq = Jac.partialPivLu().solve(-cost_vec);   // 解线性方程 Jac * dx = -cost_vec
 
-        if (dx.norm() < tol) {             // 判断步长是否足够小
+        if (dq.norm() < tol) {             // 判断步长是否足够小
             std::cout << "Converged after " << iter << " iterations.\n";
             break;
         }//end if
@@ -517,14 +517,14 @@ int main() {
     std::array<double, 2> hip = {0.1, 0};
     std::array<double, 2> desired_hip = {0.2, 0};
     std::array<double, 2> new_theta_beta;
-    auto start = std::chrono::high_resolution_clock::now();
+    auto start2 = std::chrono::high_resolution_clock::now();
     for (int i=0; i<10000; i++){
         new_theta_beta = legmodel.move(theta, beta, {desired_hip[0]-hip[0], desired_hip[1]-hip[1]});
     }
-    auto end = std::chrono::high_resolution_clock::now();
+    auto end2 = std::chrono::high_resolution_clock::now();
     // 計算執行時間，並轉換成毫秒
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-    std::cout << "time: " << duration.count() << " ms" << std::endl;
+    auto duration2 = std::chrono::duration_cast<std::chrono::milliseconds>(end2 - start2);
+    std::cout << "time: " << duration2.count() << " ms" << std::endl;
     std::cout << "Use theta = " << new_theta_beta[0] << ", " << "beta = " << new_theta_beta[1] 
             << "allows the leg to roll from (" << hip[0] << ", "  << hip[1] << ") to (" << desired_hip[0] << ", "  << desired_hip[1] << ") along the ground." << std::endl;
     
@@ -611,80 +611,80 @@ int main() {
 
 //     return 0;
 // }
-// 定义类型
-using Vector = Eigen::VectorXd;
-using Matrix = Eigen::MatrixXd;
+// // 定义类型
+// using Vector = Eigen::VectorXd;
+// using Matrix = Eigen::MatrixXd;
 
-// 定义目标函数 f(x)
-Eigen::Vector2d objective(const Vector& x) {
-    double a = x[0], b = x[1];
-    std::array<double, 2> d_q = {a, b};
-    std::array<double, 2> q = {1, 0};
-    std::array<double, 2> move_vec = {0.1, 0.1};
-    std::array<double, 2> fff = legmodel.objective(d_q, q, move_vec, 3);
-    return Vector((Eigen::Vector2d() << fff[0], fff[1]).finished());
-}
+// // 定义目标函数 f(x)
+// Eigen::Vector2d objective(const Vector& x) {
+//     double a = x[0], b = x[1];
+//     std::array<double, 2> d_q = {a, b};
+//     std::array<double, 2> q = {1, 0};
+//     std::array<double, 2> move_vec = {0.1, 0.1};
+//     std::array<double, 2> fff = legmodel.objective(d_q, q, move_vec, 3);
+//     return Vector((Eigen::Vector2d() << fff[0], fff[1]).finished());
+// }
 
-// 数值计算雅可比矩阵
-Matrix computeJacobian(const Vector& x, double epsilon = 1e-6) {
-    size_t n = x.size();
-    Matrix J(n, n);
-    Vector f0 = objective(x);
+// // 数值计算雅可比矩阵
+// Matrix computeJacobian(const Vector& x, double epsilon = 1e-6) {
+//     size_t n = x.size();
+//     Matrix J(n, n);
+//     Vector f0 = objective(x);
 
-    for (size_t i = 0; i < n; ++i) {
-        Vector x_eps = x;
-        x_eps[i] += epsilon;  // 对第 i 个变量加一个小扰动
-        Vector f_eps = objective(x_eps);
-        J.col(i) = (f_eps - f0) / epsilon;  // 数值差分计算导数
-    }
-    return J;
-}
+//     for (size_t i = 0; i < n; ++i) {
+//         Vector x_eps = x;
+//         x_eps[i] += epsilon;  // 对第 i 个变量加一个小扰动
+//         Vector f_eps = objective(x_eps);
+//         J.col(i) = (f_eps - f0) / epsilon;  // 数值差分计算导数
+//     }
+//     return J;
+// }
 
-// Newton 法求解非线性方程组
-Vector newtonSolver(const Vector& initial_guess, double tol = 1e-7, size_t max_iter = 100) {
-    Vector x = initial_guess;
-    for (size_t iter = 0; iter < max_iter; ++iter) {
-        Vector f = objective(x);           // 计算当前函数值
-        double norm_f = f.norm();          // 计算残差范数
-        if (norm_f < tol) {                // 判断收敛
-            std::cout << "Converged after " << iter << " iterations.\n";
-            return x;
-        }
+// // Newton 法求解非线性方程组
+// Vector newtonSolver(const Vector& initial_guess, double tol = 1e-7, size_t max_iter = 100) {
+//     Vector x = initial_guess;
+//     for (size_t iter = 0; iter < max_iter; ++iter) {
+//         Vector f = objective(x);           // 计算当前函数值
+//         double norm_f = f.norm();          // 计算残差范数
+//         if (norm_f < tol) {                // 判断收敛
+//             std::cout << "Converged after " << iter << " iterations.\n";
+//             return x;
+//         }
 
-        Matrix J = computeJacobian(x);     // 计算雅可比矩阵
-        Vector dx = J.partialPivLu().solve(-f); // 解线性方程 J * dx = -f
+//         Matrix J = computeJacobian(x);     // 计算雅可比矩阵
+//         Vector dx = J.partialPivLu().solve(-f); // 解线性方程 J * dx = -f
 
-        if (dx.norm() < tol) {             // 判断步长是否足够小
-            std::cout << "Converged after " << iter << " iterations.\n";
-            return x;
-        }
+//         if (dx.norm() < tol) {             // 判断步长是否足够小
+//             std::cout << "Converged after " << iter << " iterations.\n";
+//             return x;
+//         }
 
-        x += dx;                           // 更新解
-    }
+//         x += dx;                           // 更新解
+//     }
 
-    throw std::runtime_error("Newton solver did not converge.");
-}
+//     throw std::runtime_error("Newton solver did not converge.");
+// }
 
-// 主函数测试
-int main() {
-    LegModel legmodel(true);
-    Vector initial_guess(2);
-    initial_guess << 0.0, 0.0; // 初始值 (a, b) = (0, 0)
+// // 主函数测试
+// int main() {
+//     LegModel legmodel(true);
+//     Vector initial_guess(2);
+//     initial_guess << 0.0, 0.0; // 初始值 (a, b) = (0, 0)
 
-    theta = np.deg2rad(50)
-    beta = np.deg2rad(40)
-    hip = np.array([0.1, 0])
-    desired_hip = np.array([0.2, 0])
-    legmodel.move();
-    try {
-        Vector solution = newtonSolver(initial_guess);
-        std::cout << "Solution found:\n";
-        std::cout << "a = " << solution[0] << "\n";
-        std::cout << "b = " << solution[1] << "\n";
-    } catch (const std::exception& e) {
-        std::cerr << e.what() << "\n";
-    }
+//     theta = np.deg2rad(50)
+//     beta = np.deg2rad(40)
+//     hip = np.array([0.1, 0])
+//     desired_hip = np.array([0.2, 0])
+//     legmodel.move();
+//     try {
+//         Vector solution = newtonSolver(initial_guess);
+//         std::cout << "Solution found:\n";
+//         std::cout << "a = " << solution[0] << "\n";
+//         std::cout << "b = " << solution[1] << "\n";
+//     } catch (const std::exception& e) {
+//         std::cerr << e.what() << "\n";
+//     }
 
-    return 0;
-}
+//     return 0;
+// }
 
