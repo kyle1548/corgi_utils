@@ -349,7 +349,7 @@ std::array<double, 2> LegModel::move(double theta_in, double beta_in, const std:
 
         double norm_cost = cost_vec.norm();          // 计算残差范数
         if (norm_cost < tol) {                // 判断收敛
-            std::cout << "Converged after " << iter << " iterations.\n";
+            //std::cout << "Converged after " << iter << " iterations.\n";
             break;
         }//end if
 
@@ -367,7 +367,7 @@ std::array<double, 2> LegModel::move(double theta_in, double beta_in, const std:
         Eigen::Vector2d dq = Jac.partialPivLu().solve(-cost_vec);   // 解线性方程 Jac * dx = -cost_vec
 
         if (dq.norm() < tol) {             // 判断步长是否足够小
-            std::cout << "Converged after " << iter << " iterations.\n";
+            //std::cout << "Converged after " << iter << " iterations.\n";
             break;
         }//end if
 
@@ -451,7 +451,6 @@ std::array<double, 2> LegModel::objective(const std::array<double, 2>& d_q, cons
 
 
 
-
 int main() {
     LegModel legmodel(true);
     double theta = M_PI * 130.0 / 180.0;
@@ -503,8 +502,6 @@ int main() {
     legmodel.inverse(Lr_p, "Lr");
     std::cout << "Output theta, beta (degree): " << legmodel.theta*180.0/M_PI << ", "<< legmodel.beta*180.0/M_PI << std::endl;
     std::cout << "Output L_r: " << legmodel.L_r[0] << ", " << legmodel.L_r[1] << std::endl;
-
-
 
     /* Move */
     std::cout << "\n";
