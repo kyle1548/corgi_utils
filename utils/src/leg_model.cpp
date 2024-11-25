@@ -1,3 +1,4 @@
+#define _USE_MATH_DEFINES
 #include <iostream>
 #include <cmath>
 #include <complex>
@@ -9,7 +10,8 @@
 #include "../include/fitted_coefficient.hpp"
 #include <chrono>
 // #include <Eigen/Dense>
-
+#include <gsl/gsl_errno.h>
+#include <gsl/gsl_multiroots.h>
 
 class LegModel {
     public:
@@ -17,10 +19,13 @@ class LegModel {
         LegModel(bool sim = true);
 
         // Forward kinematics
-        void forward(double theta, double beta);
+        void forward(double theta, double beta, bool vector = true);
 
         // Inverse kinematics (partial implementation)
         void inverse(const double pos[2], const std::string &joint = "G", bool forward = true);
+
+        void contact_map(double theta_in, double beta_in, double slope = 0);
+
 
         // Move function (partial implementation)
         std::pair<double, double> move(double theta, double beta, const std::pair<double, double>& move_vec, bool contact_upper = true);
@@ -32,6 +37,11 @@ class LegModel {
         // Current theta and beta
         double theta;
         double beta;
+
+        // Contact map variable
+        int rim = 3;    // 1 -> 2 -> 3 -> 4 -> 5 -> 0: 
+                        // U_l -> L_l -> G -> L_r -> U_r -> None
+        double alpha;
 
     private:
         // Joint Positions in complex
@@ -62,6 +72,7 @@ class LegModel {
         void rotate();
         void symmetry();
         void to_vector();
+        std::array<double, 2> arc_min(const std::complex<double>& p1, const std::complex<double>& p2, const std::complex<double>& O, const std::string& rim);
 };
 
 LegModel::LegModel(bool sim) {
@@ -100,10 +111,10 @@ LegModel::LegModel(bool sim) {
     ang_LFG = (M_PI - (M_PI - arc_HF)) / 2.0;
 
     // Initialize positions
-    forward(theta0, 0.0);
+    this->forward(theta0, 0.0);
 }
 
-void LegModel::forward(double theta_in, double beta_in) {
+void LegModel::forward(double theta_in, double beta_in, bool vector) {
     theta = theta_in;
     beta = beta_in;
 
@@ -118,9 +129,11 @@ void LegModel::forward(double theta_in, double beta_in) {
     }
 
     // Calculate positions
-    calculate();
-    rotate();
-    to_vector();
+    this->calculate();
+    this->rotate();
+    if (vector) {
+        this->to_vector();
+    }
 }
 
 void LegModel::calculate() {
@@ -141,7 +154,7 @@ void LegModel::calculate() {
     U_l_c = B_l_c + (C_l_c - B_l_c) * std::exp(1i * ang_UBC) * (R / l3);
     L_l_c = F_l_c + (G_c - F_l_c) * std::exp(1i * ang_LFG) * (R / l8);
     H_l_c = U_l_c + (B_l_c - U_l_c) * std::exp(-1i * theta0);
-    symmetry();
+    this->symmetry();
 }
 
 void LegModel::symmetry() {
@@ -240,6 +253,76 @@ void LegModel::inverse(const double pos[2], const std::string &joint, bool forwa
 }//end inverse
 
 
+void LegModel::contact_map(double theta_in, double beta_in, double slope) {
+        using namespace std::complex_literals;
+        double beta_adjusted = beta_in - slope;
+
+        this->forward(theta, beta_adjusted, false);
+
+        std::complex<double> G_l_tmp = (G_c - L_l_c) / R * radius + L_l_c;
+        std::complex<double> G_r_tmp = (G_c - L_r_c) / R * radius + L_r_c;
+        std::complex<double> H_l_tmp = (H_l_c - U_l_c) / R * radius + U_l_c;
+        std::complex<double> H_r_tmp = (H_r_c - U_r_c) / R * radius + U_r_c;
+        std::complex<double> F_l_tmp = (F_l_c - U_l_c) / R * radius + U_l_c;
+        std::complex<double> F_r_tmp = (F_r_c - U_r_c) / R * radius + U_r_c;
+
+        std::array<std::array<double, 2>, 6> arc_list = {
+            this->arc_min(H_l_tmp, F_l_tmp, U_l_c, "left upper"),
+            this->arc_min(F_l_tmp, G_l_tmp, L_l_c, "left lower"),
+            this->arc_min(G_l_tmp, G_r_tmp, G_c, "G"),
+            this->arc_min(G_r_tmp, F_r_tmp, L_r_c, "right lower"),
+            this->arc_min(F_r_tmp, H_r_tmp, U_r_c, "right upper"),
+            {0.0, 0.0}
+        };
+
+        double min_value = arc_list[0][0];
+        int min_index = 0;
+        for(int i=1; i<6; i++){
+            if (arc_list[i][0] < min_value) {
+                min_value = arc_list[i][0];
+                min_index = i;
+            }//end if
+        }//end for
+
+        rim = min_index==5? 0 : min_index+1;
+        alpha = arc_list[min_index][1];
+}//end contact_map
+
+std::array<double, 2> LegModel::arc_min(const std::complex<double>& p1, const std::complex<double>& p2, const std::complex<double>& O, const std::string& rim) {
+        using namespace std::complex_literals;
+        double lowest_point = 0.0;
+        double alpha = 0.0;
+        double bias_alpha = 0.0;
+
+        if (rim == "left upper") {
+            // bias_alpha = -M_PI;
+        } else if (rim == "left lower") {
+            // bias_alpha = -M_PI / 3.6; // -50 degrees
+        } else if (rim == "G") {
+            std::complex<double> direction_G = p1 + p2;
+            bias_alpha = std::arg((p1 - O) / direction_G);
+        } else if (rim == "right lower") {
+            // bias_alpha = 0.0;
+        } else if (rim == "right upper") {
+            // bias_alpha = M_PI / 3.6; // 50 degrees
+        }//end if else
+
+        double cal_err = 1e-9;
+        bool in_range = ((p2 - O).real() >= -cal_err) && ((p1 - O).real() <= cal_err);
+
+        if (in_range) {
+            lowest_point = O.imag() - radius;
+            alpha = std::arg(-1i / (p1 - O));
+        } else {
+            std::complex<double> smaller = (p1.imag() < p2.imag()) ? p1 : p2;
+            lowest_point = 1.0; // Set to a large value if not normal contact
+            alpha = std::arg((smaller - O) / (p1 - O));
+        }//end if else
+
+        return {lowest_point, alpha + bias_alpha};
+}//end arc_min
+
+
 int main() {
     LegModel legmodel(true);
 
@@ -266,6 +349,10 @@ int main() {
     std::cout << "Output G with single value input: (" << legmodel.G[0] << ", " << legmodel.G[1] << ")\n";
 
     // Note: The contact_map function and other advanced features are not fully implemented in this example.
+    /* Contact map */
+    legmodel.contact_map(theta, beta);
+    std::cout << "Output rim with single value input: " << legmodel.rim << std::endl;
+    std::cout << "Output alpha with single value input: " << legmodel.alpha << std::endl;
 
     /* Inverse kinematics */
     std::cout << "\n";
