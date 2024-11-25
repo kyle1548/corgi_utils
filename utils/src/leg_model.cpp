@@ -344,7 +344,7 @@ std::array<double, 2> LegModel::move(double theta_in, double beta_in, const std:
     // Use optimization solver to find d_theta and d_beta (analogous to fsolve)
     std::array<double, 2> result;
     // auto result = objective({0, 0}, {theta, beta}, move_vec, contact_rim);
-    fsolve(result);
+    // fsolve(result);
     double d_theta = result[0];
     double d_beta = result[1];
     
@@ -362,10 +362,10 @@ std::array<double, 2> LegModel::objective(const std::array<double, 2>& d_q, cons
     std::array<double, 2> guessed_hip;
     if (contact_rim == 1) {
         // Left upper rim calculations
-        current_F_exp = (F_l_poly[0][0](current_q[0]) + std::complex<double>(0, 1) * F_l_poly[1][0](current_q[0])) * std::exp(std::complex<double>(0, current_q[1]));
-        current_U_exp = (U_l_poly[0][0](current_q[0]) + std::complex<double>(0, 1) * U_l_poly[1][0](current_q[0])) * std::exp(std::complex<double>(0, current_q[1]));
-        guessed_F_exp = (F_l_poly[0][0](guessed_q[0]) + std::complex<double>(0, 1) * F_l_poly[1][0](guessed_q[0])) * std::exp(std::complex<double>(0, guessed_q[1]));
-        guessed_U_exp = (U_l_poly[0][0](guessed_q[0]) + std::complex<double>(0, 1) * U_l_poly[1][0](guessed_q[0])) * std::exp(std::complex<double>(0, guessed_q[1]));
+        current_F_exp = (F_l_poly[0](current_q[0]) + std::complex<double>(0, 1) * F_l_poly[1](current_q[0])) * std::exp(std::complex<double>(0, current_q[1]));
+        current_U_exp = (U_l_poly[0](current_q[0]) + std::complex<double>(0, 1) * U_l_poly[1](current_q[0])) * std::exp(std::complex<double>(0, current_q[1]));
+        guessed_F_exp = (F_l_poly[0](guessed_q[0]) + std::complex<double>(0, 1) * F_l_poly[1](guessed_q[0])) * std::exp(std::complex<double>(0, guessed_q[1]));
+        guessed_U_exp = (U_l_poly[0](guessed_q[0]) + std::complex<double>(0, 1) * U_l_poly[1](guessed_q[0])) * std::exp(std::complex<double>(0, guessed_q[1]));
         
         double d_alpha = std::arg(-std::complex<double>(0, 1) / (guessed_F_exp - guessed_U_exp)) - std::arg(-std::complex<double>(0, 1) / (current_F_exp - current_U_exp));
         double roll_d = d_alpha * radius;
@@ -373,10 +373,10 @@ std::array<double, 2> LegModel::objective(const std::array<double, 2>& d_q, cons
         std::array<double, 2> next_U = {current_U_exp.real() + roll_d, current_U_exp.imag()};
         guessed_hip = {next_U[0] - guessed_U_exp.real(), next_U[1] - guessed_U_exp.imag()};
     } else if (contact_rim == 2) {
-        current_F_exp = (F_l_poly[0][0](current_q[0]) + std::complex<double>(0, 1) * F_l_poly[1][0](current_q[0])) * std::exp(std::complex<double>(0, current_q[1]));
-        current_U_exp = (U_l_poly[0][0](current_q[0]) + std::complex<double>(0, 1) * U_l_poly[1][0](current_q[0])) * std::exp(std::complex<double>(0, current_q[1]));
-        guessed_F_exp = (F_l_poly[0][0](guessed_q[0]) + std::complex<double>(0, 1) * F_l_poly[1][0](guessed_q[0])) * std::exp(std::complex<double>(0, guessed_q[1]));
-        guessed_U_exp = (U_l_poly[0][0](guessed_q[0]) + std::complex<double>(0, 1) * U_l_poly[1][0](guessed_q[0])) * std::exp(std::complex<double>(0, guessed_q[1]));
+        current_F_exp = (F_l_poly[0](current_q[0]) + std::complex<double>(0, 1) * F_l_poly[1](current_q[0])) * std::exp(std::complex<double>(0, current_q[1]));
+        current_U_exp = (U_l_poly[0](current_q[0]) + std::complex<double>(0, 1) * U_l_poly[1](current_q[0])) * std::exp(std::complex<double>(0, current_q[1]));
+        guessed_F_exp = (F_l_poly[0](guessed_q[0]) + std::complex<double>(0, 1) * F_l_poly[1](guessed_q[0])) * std::exp(std::complex<double>(0, guessed_q[1]));
+        guessed_U_exp = (U_l_poly[0](guessed_q[0]) + std::complex<double>(0, 1) * U_l_poly[1](guessed_q[0])) * std::exp(std::complex<double>(0, guessed_q[1]));
         
         double d_alpha = std::arg(-std::complex<double>(0, 1) / (guessed_F_exp - guessed_U_exp)) - std::arg(-std::complex<double>(0, 1) / (current_F_exp - current_U_exp));
         double roll_d = d_alpha * radius;
@@ -385,10 +385,10 @@ std::array<double, 2> LegModel::objective(const std::array<double, 2>& d_q, cons
         guessed_hip = {next_U[0] - guessed_U_exp.real(), next_U[1] - guessed_U_exp.imag()};
 
     } else if (contact_rim == 3) {
-        current_F_exp = (F_l_poly[0][0](current_q[0]) + std::complex<double>(0, 1) * F_l_poly[1][0](current_q[0])) * std::exp(std::complex<double>(0, current_q[1]));
-        current_U_exp = (U_l_poly[0][0](current_q[0]) + std::complex<double>(0, 1) * U_l_poly[1][0](current_q[0])) * std::exp(std::complex<double>(0, current_q[1]));
-        guessed_F_exp = (F_l_poly[0][0](guessed_q[0]) + std::complex<double>(0, 1) * F_l_poly[1][0](guessed_q[0])) * std::exp(std::complex<double>(0, guessed_q[1]));
-        guessed_U_exp = (U_l_poly[0][0](guessed_q[0]) + std::complex<double>(0, 1) * U_l_poly[1][0](guessed_q[0])) * std::exp(std::complex<double>(0, guessed_q[1]));
+        current_F_exp = (F_l_poly[0](current_q[0]) + std::complex<double>(0, 1) * F_l_poly[1](current_q[0])) * std::exp(std::complex<double>(0, current_q[1]));
+        current_U_exp = (U_l_poly[0](current_q[0]) + std::complex<double>(0, 1) * U_l_poly[1](current_q[0])) * std::exp(std::complex<double>(0, current_q[1]));
+        guessed_F_exp = (F_l_poly[0](guessed_q[0]) + std::complex<double>(0, 1) * F_l_poly[1](guessed_q[0])) * std::exp(std::complex<double>(0, guessed_q[1]));
+        guessed_U_exp = (U_l_poly[0](guessed_q[0]) + std::complex<double>(0, 1) * U_l_poly[1](guessed_q[0])) * std::exp(std::complex<double>(0, guessed_q[1]));
         
         double d_alpha = std::arg(-std::complex<double>(0, 1) / (guessed_F_exp - guessed_U_exp)) - std::arg(-std::complex<double>(0, 1) / (current_F_exp - current_U_exp));
         double roll_d = d_alpha * radius;
@@ -396,10 +396,10 @@ std::array<double, 2> LegModel::objective(const std::array<double, 2>& d_q, cons
         std::array<double, 2> next_U = {current_U_exp.real() + roll_d, current_U_exp.imag()};
         guessed_hip = {next_U[0] - guessed_U_exp.real(), next_U[1] - guessed_U_exp.imag()};
     } else if (contact_rim == 4) {
-        current_F_exp = (F_l_poly[0][0](current_q[0]) + std::complex<double>(0, 1) * F_l_poly[1][0](current_q[0])) * std::exp(std::complex<double>(0, current_q[1]));
-        current_U_exp = (U_l_poly[0][0](current_q[0]) + std::complex<double>(0, 1) * U_l_poly[1][0](current_q[0])) * std::exp(std::complex<double>(0, current_q[1]));
-        guessed_F_exp = (F_l_poly[0][0](guessed_q[0]) + std::complex<double>(0, 1) * F_l_poly[1][0](guessed_q[0])) * std::exp(std::complex<double>(0, guessed_q[1]));
-        guessed_U_exp = (U_l_poly[0][0](guessed_q[0]) + std::complex<double>(0, 1) * U_l_poly[1][0](guessed_q[0])) * std::exp(std::complex<double>(0, guessed_q[1]));
+        current_F_exp = (F_l_poly[0](current_q[0]) + std::complex<double>(0, 1) * F_l_poly[1](current_q[0])) * std::exp(std::complex<double>(0, current_q[1]));
+        current_U_exp = (U_l_poly[0](current_q[0]) + std::complex<double>(0, 1) * U_l_poly[1](current_q[0])) * std::exp(std::complex<double>(0, current_q[1]));
+        guessed_F_exp = (F_l_poly[0](guessed_q[0]) + std::complex<double>(0, 1) * F_l_poly[1](guessed_q[0])) * std::exp(std::complex<double>(0, guessed_q[1]));
+        guessed_U_exp = (U_l_poly[0](guessed_q[0]) + std::complex<double>(0, 1) * U_l_poly[1](guessed_q[0])) * std::exp(std::complex<double>(0, guessed_q[1]));
         
         double d_alpha = std::arg(-std::complex<double>(0, 1) / (guessed_F_exp - guessed_U_exp)) - std::arg(-std::complex<double>(0, 1) / (current_F_exp - current_U_exp));
         double roll_d = d_alpha * radius;
@@ -408,10 +408,10 @@ std::array<double, 2> LegModel::objective(const std::array<double, 2>& d_q, cons
         guessed_hip = {next_U[0] - guessed_U_exp.real(), next_U[1] - guessed_U_exp.imag()};
 
     } else if (contact_rim == 5) {
-        current_F_exp = (F_l_poly[0][0](current_q[0]) + std::complex<double>(0, 1) * F_l_poly[1][0](current_q[0])) * std::exp(std::complex<double>(0, current_q[1]));
-        current_U_exp = (U_l_poly[0][0](current_q[0]) + std::complex<double>(0, 1) * U_l_poly[1][0](current_q[0])) * std::exp(std::complex<double>(0, current_q[1]));
-        guessed_F_exp = (F_l_poly[0][0](guessed_q[0]) + std::complex<double>(0, 1) * F_l_poly[1][0](guessed_q[0])) * std::exp(std::complex<double>(0, guessed_q[1]));
-        guessed_U_exp = (U_l_poly[0][0](guessed_q[0]) + std::complex<double>(0, 1) * U_l_poly[1][0](guessed_q[0])) * std::exp(std::complex<double>(0, guessed_q[1]));
+        current_F_exp = (F_l_poly[0](current_q[0]) + std::complex<double>(0, 1) * F_l_poly[1](current_q[0])) * std::exp(std::complex<double>(0, current_q[1]));
+        current_U_exp = (U_l_poly[0](current_q[0]) + std::complex<double>(0, 1) * U_l_poly[1](current_q[0])) * std::exp(std::complex<double>(0, current_q[1]));
+        guessed_F_exp = (F_l_poly[0](guessed_q[0]) + std::complex<double>(0, 1) * F_l_poly[1](guessed_q[0])) * std::exp(std::complex<double>(0, guessed_q[1]));
+        guessed_U_exp = (U_l_poly[0](guessed_q[0]) + std::complex<double>(0, 1) * U_l_poly[1](guessed_q[0])) * std::exp(std::complex<double>(0, guessed_q[1]));
         
         double d_alpha = std::arg(-std::complex<double>(0, 1) / (guessed_F_exp - guessed_U_exp)) - std::arg(-std::complex<double>(0, 1) / (current_F_exp - current_U_exp));
         double roll_d = d_alpha * radius;
