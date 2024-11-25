@@ -9,10 +9,10 @@
 
 #include "../include/fitted_coefficient.hpp"
 #include <chrono>
-// #include <Eigen/Dense>
-#include <gsl/gsl_errno.h>
-#include <gsl/gsl_multiroots.h>
-#include <gsl/gsl_vector.h>
+#include <Eigen/Dense>
+// #include <gsl/gsl_errno.h>
+// #include <gsl/gsl_multiroots.h>
+// #include <gsl/gsl_vector.h>
 // #include "fsolve.cpp"
 
 class LegModel {
@@ -518,70 +518,148 @@ std::array<double, 2> LegModel::objective(const std::array<double, 2>& d_q, cons
 //     return 0;
 // }
 
-int objective(const gsl_vector *x, gsl_vector *f) {
-    LegModel legmodel(true);
+// int objective(const gsl_vector *x, gsl_vector *f) {
+//     LegModel legmodel(true);
 
-    double x1 = gsl_vector_get(x, 0);
-    double x2 = gsl_vector_get(x, 1);
+//     double x1 = gsl_vector_get(x, 0);
+//     double x2 = gsl_vector_get(x, 1);
 
-    // 定义目标函数的两项 f1 和 f2
-    std::array<double, 2> d_q = {x1, x2};
+//     // 定义目标函数的两项 f1 和 f2
+//     std::array<double, 2> d_q = {x1, x2};
+//     std::array<double, 2> q = {1, 0};
+//     std::array<double, 2> move_vec = {0.1, 0.1};
+//     std::array<double, 2> fff = legmodel.objective(d_q, q, move_vec, 3);
+//     double f1 = fff[0];
+//     double f2 = fff[1];
+
+//     gsl_vector_set(f, 0, f1);
+//     gsl_vector_set(f, 1, f2);
+
+//     return GSL_SUCCESS;
+// }
+
+// int main() {
+    
+//     gsl_vector *x = gsl_vector_alloc(2); // 假设有两个变量 x1 和 x2
+//     gsl_vector_set(x, 0, 0.0);  // 初始化 x1 = 0
+//     gsl_vector_set(x, 1, 0.0);  // 初始化 x2 = 0
+
+//     gsl_vector *f = gsl_vector_alloc(2); // 存储目标函数值
+//     gsl_matrix *J = gsl_matrix_alloc(2, 2); // 存储雅可比矩阵
+
+//     int status;
+//     size_t iter = 0;
+//     double tol = 1e-7; // 收敛阈值
+
+//     do {
+//         iter++;
+
+//         // 计算目标函数值
+//         objective(x, f);
+
+//         // 计算数值雅可比矩阵
+//         jacobian_numerical(x, f, J);
+
+//         // 解线性方程 J * delta_x = -f，得到修正量 delta_x
+//         gsl_vector *delta_x = gsl_vector_alloc(2);
+//         gsl_linalg_LU_decomp(J, nullptr, &status);  // LU 分解
+//         gsl_linalg_LU_solve(J, nullptr, f, delta_x); // 求解
+
+//         // 更新 x
+//         gsl_vector_add(x, delta_x);
+
+//         // 输出当前解
+//         std::cout << "Iteration " << iter << ": x1 = " << gsl_vector_get(x, 0)
+//                   << ", x2 = " << gsl_vector_get(x, 1) << std::endl;
+
+//         gsl_vector_free(delta_x);
+//     } while (gsl_vector_get(f, 0) > tol && gsl_vector_get(f, 1) > tol && iter < 100);
+
+//     // 输出结果
+//     std::cout << "Final solution: x1 = " << gsl_vector_get(x, 0)
+//               << ", x2 = " << gsl_vector_get(x, 1) << std::endl;
+
+//     gsl_vector_free(x);
+//     gsl_vector_free(f);
+//     gsl_matrix_free(J);
+
+//     return 0;
+// }
+
+
+#include <iostream>
+#include <Eigen/Dense>
+#include <cmath>
+
+// 定义类型
+using Vector = Eigen::VectorXd;
+using Matrix = Eigen::MatrixXd;
+LegModel legmodel(true);
+
+// 定义目标函数 f(x)
+Vector objective(const Vector& x) {
+    double a = x[0], b = x[1];
+    std::array<double, 2> d_q = {a, b};
     std::array<double, 2> q = {1, 0};
     std::array<double, 2> move_vec = {0.1, 0.1};
     std::array<double, 2> fff = legmodel.objective(d_q, q, move_vec, 3);
-    double f1 = fff[0];
-    double f2 = fff[1];
-
-    gsl_vector_set(f, 0, f1);
-    gsl_vector_set(f, 1, f2);
-
-    return GSL_SUCCESS;
+    return Vector((Eigen::Vector2d() << fff[0], fff[1]).finished());
 }
 
+// 数值计算雅可比矩阵
+Matrix computeJacobian(const Vector& x, double epsilon = 1e-6) {
+    size_t n = x.size();
+    Matrix J(n, n);
+    Vector f0 = objective(x);
+
+    for (size_t i = 0; i < n; ++i) {
+        Vector x_eps = x;
+        x_eps[i] += epsilon;  // 对第 i 个变量加一个小扰动
+        Vector f_eps = objective(x_eps);
+        J.col(i) = (f_eps - f0) / epsilon;  // 数值差分计算导数
+    }
+    return J;
+}
+
+// Newton 法求解非线性方程组
+Vector newtonSolver(const Vector& initial_guess, double tol = 1e-7, size_t max_iter = 100) {
+    Vector x = initial_guess;
+    for (size_t iter = 0; iter < max_iter; ++iter) {
+        Vector f = objective(x);           // 计算当前函数值
+        double norm_f = f.norm();          // 计算残差范数
+        if (norm_f < tol) {                // 判断收敛
+            std::cout << "Converged after " << iter << " iterations.\n";
+            return x;
+        }
+
+        Matrix J = computeJacobian(x);     // 计算雅可比矩阵
+        Vector dx = J.partialPivLu().solve(-f); // 解线性方程 J * dx = -f
+
+        if (dx.norm() < tol) {             // 判断步长是否足够小
+            std::cout << "Converged after " << iter << " iterations.\n";
+            return x;
+        }
+
+        x += dx;                           // 更新解
+    }
+
+    throw std::runtime_error("Newton solver did not converge.");
+}
+
+// 主函数测试
 int main() {
-    
-    gsl_vector *x = gsl_vector_alloc(2); // 假设有两个变量 x1 和 x2
-    gsl_vector_set(x, 0, 0.0);  // 初始化 x1 = 0
-    gsl_vector_set(x, 1, 0.0);  // 初始化 x2 = 0
+    Vector initial_guess(2);
+    initial_guess << 0.0, 0.0; // 初始值 (a, b) = (0, 0)
 
-    gsl_vector *f = gsl_vector_alloc(2); // 存储目标函数值
-    gsl_matrix *J = gsl_matrix_alloc(2, 2); // 存储雅可比矩阵
-
-    int status;
-    size_t iter = 0;
-    double tol = 1e-7; // 收敛阈值
-
-    do {
-        iter++;
-
-        // 计算目标函数值
-        objective(x, f);
-
-        // 计算数值雅可比矩阵
-        jacobian_numerical(x, f, J);
-
-        // 解线性方程 J * delta_x = -f，得到修正量 delta_x
-        gsl_vector *delta_x = gsl_vector_alloc(2);
-        gsl_linalg_LU_decomp(J, nullptr, &status);  // LU 分解
-        gsl_linalg_LU_solve(J, nullptr, f, delta_x); // 求解
-
-        // 更新 x
-        gsl_vector_add(x, delta_x);
-
-        // 输出当前解
-        std::cout << "Iteration " << iter << ": x1 = " << gsl_vector_get(x, 0)
-                  << ", x2 = " << gsl_vector_get(x, 1) << std::endl;
-
-        gsl_vector_free(delta_x);
-    } while (gsl_vector_get(f, 0) > tol && gsl_vector_get(f, 1) > tol && iter < 100);
-
-    // 输出结果
-    std::cout << "Final solution: x1 = " << gsl_vector_get(x, 0)
-              << ", x2 = " << gsl_vector_get(x, 1) << std::endl;
-
-    gsl_vector_free(x);
-    gsl_vector_free(f);
-    gsl_matrix_free(J);
+    try {
+        Vector solution = newtonSolver(initial_guess);
+        std::cout << "Solution found:\n";
+        std::cout << "a = " << solution[0] << "\n";
+        std::cout << "b = " << solution[1] << "\n";
+    } catch (const std::exception& e) {
+        std::cerr << e.what() << "\n";
+    }
 
     return 0;
 }
+
