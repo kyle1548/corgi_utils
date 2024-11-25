@@ -23,16 +23,14 @@ class LegModel {
         // Forward kinematics
         void forward(double theta, double beta, bool vector = true);
 
-        // Inverse kinematics (partial implementation)
+        // Inverse kinematics
         void inverse(const double pos[2], const std::string &joint = "G", bool forward = true);
 
+        // Contact map
         void contact_map(double theta_in, double beta_in, double slope = 0);
 
-
-        // Move function (partial implementation)
-        std::array<double, 2> move(double theta_in, double beta_in, const std::array<double, 2>& move_vec, bool contact_upper=true);
-
-        std::array<double, 2> objective(const std::array<double, 2>& d_q, const std::array<double, 2>& current_q, const std::array<double, 2>& move_vec, int contact_rim);
+        // Move
+        std::array<double, 2> move(double theta_in, double beta_in, const std::array<double, 2>& move_vec, bool contact_upper=true, double tol = 1e-12, size_t max_iter = 100);
 
         // Joint Positions
         std::array<double, 2> A_l, A_r, B_l, B_r, C_l, C_r, D_l, D_r, E, F_l, F_r, G, H_l, H_r, U_l, U_r, L_l, L_r;
@@ -76,7 +74,9 @@ class LegModel {
         void symmetry();
         void to_vector();
         std::array<double, 2> arc_min(const std::complex<double>& p1, const std::complex<double>& p2, const std::complex<double>& O, const std::string& rim);
-};
+        std::array<double, 2> objective(const std::array<double, 2>& d_q, const std::array<double, 2>& current_q, const std::array<double, 2>& move_vec, int contact_rim);
+        Eigen::Vector2d LegModel::newtonSolver(const Vector& initial_guess, double tol = 1e-12, size_t max_iter = 100);
+};//end class LegModel
 
 LegModel::LegModel(bool sim) {
     // Constants initialization
@@ -324,7 +324,7 @@ std::array<double, 2> LegModel::arc_min(const std::complex<double>& p1, const st
         return {lowest_point, alpha + bias_alpha};
 }//end arc_min
 
-std::array<double, 2> LegModel::move(double theta_in, double beta_in, const std::array<double, 2>& move_vec, bool contact_upper) {
+std::array<double, 2> LegModel::move(double theta_in, double beta_in, const std::array<double, 2>& move_vec, bool contact_upper, double tol, size_t max_iter) {
     this->contact_map(theta_in, beta_in);
     
     // Contact point logic
@@ -342,14 +342,50 @@ std::array<double, 2> LegModel::move(double theta_in, double beta_in, const std:
     }//end if else
 
     // Use optimization solver to find d_theta and d_beta (analogous to fsolve)
+    std::array<double, 2> guess_dq = {0.0, 0.0};    // d_theta, d_beta / initial guess = (0, 0)
+    for (size_t iter = 0; iter < max_iter; ++iter) {
+        std::array<double, 2> cost = legmodel.objective(guess_dq, {theta_in, beta_in}, move_vec, contact_rim);     // 计算当前函数值
+        Eigen::Vector2d cost_vec(cost[0], cost[1]);
+
+        double norm_cost = cost_vec.norm();          // 计算残差范数
+        if (norm_cost < tol) {                // 判断收敛
+            std::cout << "Converged after " << iter << " iterations.\n";
+            break
+        }//end if
+
+        // computeJacobian, 数值计算雅可比矩阵
+        double epsilon = 1e-6;
+        Eigen::Matrix2d Jac;
+        for (size_t i = 0; i < 2; ++i) {
+            std::array<double, 2> dq_eps = guess_dq;
+            dq_eps[i] += epsilon;  // 对第 i 个变量加一个小扰动
+            std::array<double, 2> cost_eps = legmodel.objective(dq_eps, {theta_in, beta_in}, move_vec, contact_rim);
+            Eigen::Vector2d cost_eps_vec(cost_eps[0], cost_eps[1]);
+            Jac.col(i) = (cost_eps_vec - cost_vec) / epsilon;  // 数值差分计算导数
+        }//end for
+
+        Eigen::Vector2d dq = Jac.partialPivLu().solve(-cost_vec);   // 解线性方程 Jac * dx = -cost_vec
+
+        if (dx.norm() < tol) {             // 判断步长是否足够小
+            std::cout << "Converged after " << iter << " iterations.\n";
+            break;
+        }//end if
+
+        // 更新解
+        guess_dq[0] += dq[0];
+        guess_dq[1] += dq[1];
+
+        if (iter == max_iter-1) {
+            throw std::runtime_error("Newton solver did not converge.");
+        }//end if
+    }//end for
+
     std::array<double, 2> result;
     // auto result = objective({0, 0}, {theta, beta}, move_vec, contact_rim);
     // fsolve(result);
-    double d_theta = result[0];
-    double d_beta = result[1];
     
-    theta += d_theta;
-    beta  += d_beta;
+    theta += guess_dq[0];
+    beta  += guess_dq[1];
     this->forward(theta, beta);
     return {theta, beta};
 }//end move
@@ -358,165 +394,155 @@ std::array<double, 2> LegModel::objective(const std::array<double, 2>& d_q, cons
     using namespace std::complex_literals;
     std::array<double, 2> guessed_q = {current_q[0] + d_q[0], current_q[1] + d_q[1]};
     
-    std::complex<double> current_F_exp, current_U_exp, guessed_F_exp, guessed_U_exp;
+    std::complex<double> current_F_exp, current_G_exp, current_U_exp, current_L_exp, 
+                        guessed_F_exp, guessed_G_exp, guessed_U_exp, guessed_L_exp;
     std::array<double, 2> guessed_hip;
     if (contact_rim == 1) {
-        // Left upper rim calculations
-        current_F_exp = (F_l_poly[0](current_q[0]) + std::complex<double>(0, 1) * F_l_poly[1](current_q[0])) * std::exp(std::complex<double>(0, current_q[1]));
-        current_U_exp = (U_l_poly[0](current_q[0]) + std::complex<double>(0, 1) * U_l_poly[1](current_q[0])) * std::exp(std::complex<double>(0, current_q[1]));
-        guessed_F_exp = (F_l_poly[0](guessed_q[0]) + std::complex<double>(0, 1) * F_l_poly[1](guessed_q[0])) * std::exp(std::complex<double>(0, guessed_q[1]));
-        guessed_U_exp = (U_l_poly[0](guessed_q[0]) + std::complex<double>(0, 1) * U_l_poly[1](guessed_q[0])) * std::exp(std::complex<double>(0, guessed_q[1]));
-        
-        double d_alpha = std::arg(-std::complex<double>(0, 1) / (guessed_F_exp - guessed_U_exp)) - std::arg(-std::complex<double>(0, 1) / (current_F_exp - current_U_exp));
+        // Left upper rim 
+        current_F_exp = ( F_l_poly[0](current_q[0])+1i*F_l_poly[1](current_q[0]) ) *std::exp( std::complex<double>(0, current_q[1]) );
+        current_U_exp = ( U_l_poly[0](current_q[0])+1i*U_l_poly[1](current_q[0]) ) *std::exp( std::complex<double>(0, current_q[1]) );
+        guessed_F_exp = ( F_l_poly[0](guessed_q[0])+1i*F_l_poly[1](guessed_q[0]) ) *std::exp( std::complex<double>(0, guessed_q[1]) );
+        guessed_U_exp = ( U_l_poly[0](guessed_q[0])+1i*U_l_poly[1](guessed_q[0]) ) *std::exp( std::complex<double>(0, guessed_q[1]) );
+        double d_alpha = std::arg( -1i/(guessed_F_exp - guessed_U_exp) ) - std::arg( -1i/(current_F_exp - current_U_exp) );
         double roll_d = d_alpha * radius;
-        
         std::array<double, 2> next_U = {current_U_exp.real() + roll_d, current_U_exp.imag()};
-        guessed_hip = {next_U[0] - guessed_U_exp.real(), next_U[1] - guessed_U_exp.imag()};
+        guessed_hip = {next_U[0] - guessed_U_exp.real(), next_U[1] - guessed_U_exp.imag()}; // next_U - guessed_U
     } else if (contact_rim == 2) {
-        current_F_exp = (F_l_poly[0](current_q[0]) + std::complex<double>(0, 1) * F_l_poly[1](current_q[0])) * std::exp(std::complex<double>(0, current_q[1]));
-        current_U_exp = (U_l_poly[0](current_q[0]) + std::complex<double>(0, 1) * U_l_poly[1](current_q[0])) * std::exp(std::complex<double>(0, current_q[1]));
-        guessed_F_exp = (F_l_poly[0](guessed_q[0]) + std::complex<double>(0, 1) * F_l_poly[1](guessed_q[0])) * std::exp(std::complex<double>(0, guessed_q[1]));
-        guessed_U_exp = (U_l_poly[0](guessed_q[0]) + std::complex<double>(0, 1) * U_l_poly[1](guessed_q[0])) * std::exp(std::complex<double>(0, guessed_q[1]));
-        
-        double d_alpha = std::arg(-std::complex<double>(0, 1) / (guessed_F_exp - guessed_U_exp)) - std::arg(-std::complex<double>(0, 1) / (current_F_exp - current_U_exp));
+        // Left lower rim 
+        current_G_exp = 1i*G_poly[1](current_q[0]) *std::exp( std::complex<double>(0, current_q[1]) );
+        current_L_exp = ( L_l_poly[0](current_q[0])+1i*L_l_poly[1](current_q[0]) ) *std::exp( std::complex<double>(0, current_q[1]) );
+        guessed_G_exp = 1i*G_poly[1](guessed_q[0]) *std::exp( std::complex<double>(0, guessed_q[1]) );
+        guessed_L_exp = ( L_l_poly[0](guessed_q[0])+1i*L_l_poly[1](guessed_q[0]) ) *std::exp( std::complex<double>(0, guessed_q[1]) );
+        double d_alpha = std::arg( -1i/(guessed_G_exp - guessed_L_exp) ) - std::arg( -1i/(current_G_exp - current_L_exp) );
         double roll_d = d_alpha * radius;
-        
-        std::array<double, 2> next_U = {current_U_exp.real() + roll_d, current_U_exp.imag()};
-        guessed_hip = {next_U[0] - guessed_U_exp.real(), next_U[1] - guessed_U_exp.imag()};
-
+        std::array<double, 2> next_L = {current_L_exp.real() + roll_d, current_L_exp.imag()};
+        guessed_hip = {next_L[0] - guessed_L_exp.real(), next_L[1] - guessed_L_exp.imag()}; // next_L - guessed_L
     } else if (contact_rim == 3) {
-        current_F_exp = (F_l_poly[0](current_q[0]) + std::complex<double>(0, 1) * F_l_poly[1](current_q[0])) * std::exp(std::complex<double>(0, current_q[1]));
-        current_U_exp = (U_l_poly[0](current_q[0]) + std::complex<double>(0, 1) * U_l_poly[1](current_q[0])) * std::exp(std::complex<double>(0, current_q[1]));
-        guessed_F_exp = (F_l_poly[0](guessed_q[0]) + std::complex<double>(0, 1) * F_l_poly[1](guessed_q[0])) * std::exp(std::complex<double>(0, guessed_q[1]));
-        guessed_U_exp = (U_l_poly[0](guessed_q[0]) + std::complex<double>(0, 1) * U_l_poly[1](guessed_q[0])) * std::exp(std::complex<double>(0, guessed_q[1]));
-        
-        double d_alpha = std::arg(-std::complex<double>(0, 1) / (guessed_F_exp - guessed_U_exp)) - std::arg(-std::complex<double>(0, 1) / (current_F_exp - current_U_exp));
-        double roll_d = d_alpha * radius;
-        
-        std::array<double, 2> next_U = {current_U_exp.real() + roll_d, current_U_exp.imag()};
-        guessed_hip = {next_U[0] - guessed_U_exp.real(), next_U[1] - guessed_U_exp.imag()};
+        // G
+        current_G_exp = 1i*G_poly[1](current_q[0]) *std::exp( std::complex<double>(0, current_q[1]) );
+        guessed_G_exp = 1i*G_poly[1](guessed_q[0]) *std::exp( std::complex<double>(0, guessed_q[1]) );
+        double roll_d = -d_q[1] * r;
+        std::array<double, 2> next_G = {current_G_exp.real() + roll_d, current_G_exp.imag()};
+        guessed_hip = {next_G[0] - guessed_G_exp.real(), next_G[1] - guessed_G_exp.imag()}; // next_G - guessed_G
     } else if (contact_rim == 4) {
-        current_F_exp = (F_l_poly[0](current_q[0]) + std::complex<double>(0, 1) * F_l_poly[1](current_q[0])) * std::exp(std::complex<double>(0, current_q[1]));
-        current_U_exp = (U_l_poly[0](current_q[0]) + std::complex<double>(0, 1) * U_l_poly[1](current_q[0])) * std::exp(std::complex<double>(0, current_q[1]));
-        guessed_F_exp = (F_l_poly[0](guessed_q[0]) + std::complex<double>(0, 1) * F_l_poly[1](guessed_q[0])) * std::exp(std::complex<double>(0, guessed_q[1]));
-        guessed_U_exp = (U_l_poly[0](guessed_q[0]) + std::complex<double>(0, 1) * U_l_poly[1](guessed_q[0])) * std::exp(std::complex<double>(0, guessed_q[1]));
-        
-        double d_alpha = std::arg(-std::complex<double>(0, 1) / (guessed_F_exp - guessed_U_exp)) - std::arg(-std::complex<double>(0, 1) / (current_F_exp - current_U_exp));
+        // Right lower rim 
+        current_G_exp = 1i*G_poly[1](current_q[0]) *std::exp( std::complex<double>(0, current_q[1]) );
+        current_L_exp = ( L_r_poly[0](current_q[0])+1i*L_r_poly[1](current_q[0]) ) *std::exp( std::complex<double>(0, current_q[1]) );
+        guessed_G_exp = 1i*G_poly[1](guessed_q[0]) *std::exp( std::complex<double>(0, guessed_q[1]) );
+        guessed_L_exp = ( L_r_poly[0](guessed_q[0])+1i*L_r_poly[1](guessed_q[0]) ) *std::exp( std::complex<double>(0, guessed_q[1]) );
+        double d_alpha = std::arg( -1i/(guessed_G_exp - guessed_L_exp) ) - std::arg( -1i/(current_G_exp - current_L_exp) );
         double roll_d = d_alpha * radius;
-        
-        std::array<double, 2> next_U = {current_U_exp.real() + roll_d, current_U_exp.imag()};
-        guessed_hip = {next_U[0] - guessed_U_exp.real(), next_U[1] - guessed_U_exp.imag()};
-
+        std::array<double, 2> next_L = {current_L_exp.real() + roll_d, current_L_exp.imag()};
+        guessed_hip = {next_L[0] - guessed_L_exp.real(), next_L[1] - guessed_L_exp.imag()}; // next_L - guessed_L
     } else if (contact_rim == 5) {
-        current_F_exp = (F_l_poly[0](current_q[0]) + std::complex<double>(0, 1) * F_l_poly[1](current_q[0])) * std::exp(std::complex<double>(0, current_q[1]));
-        current_U_exp = (U_l_poly[0](current_q[0]) + std::complex<double>(0, 1) * U_l_poly[1](current_q[0])) * std::exp(std::complex<double>(0, current_q[1]));
-        guessed_F_exp = (F_l_poly[0](guessed_q[0]) + std::complex<double>(0, 1) * F_l_poly[1](guessed_q[0])) * std::exp(std::complex<double>(0, guessed_q[1]));
-        guessed_U_exp = (U_l_poly[0](guessed_q[0]) + std::complex<double>(0, 1) * U_l_poly[1](guessed_q[0])) * std::exp(std::complex<double>(0, guessed_q[1]));
-        
-        double d_alpha = std::arg(-std::complex<double>(0, 1) / (guessed_F_exp - guessed_U_exp)) - std::arg(-std::complex<double>(0, 1) / (current_F_exp - current_U_exp));
+        // Right upper rim 
+        current_F_exp = ( F_r_poly[0](current_q[0])+1i*F_r_poly[1](current_q[0]) ) *std::exp( std::complex<double>(0, current_q[1]) );
+        current_U_exp = ( U_r_poly[0](current_q[0])+1i*U_r_poly[1](current_q[0]) ) *std::exp( std::complex<double>(0, current_q[1]) );
+        guessed_F_exp = ( F_r_poly[0](guessed_q[0])+1i*F_r_poly[1](guessed_q[0]) ) *std::exp( std::complex<double>(0, guessed_q[1]) );
+        guessed_U_exp = ( U_r_poly[0](guessed_q[0])+1i*U_r_poly[1](guessed_q[0]) ) *std::exp( std::complex<double>(0, guessed_q[1]) );
+        double d_alpha = std::arg( -1i/(guessed_F_exp - guessed_U_exp) ) - std::arg( -1i/(current_F_exp - current_U_exp) );
         double roll_d = d_alpha * radius;
-        
         std::array<double, 2> next_U = {current_U_exp.real() + roll_d, current_U_exp.imag()};
-        guessed_hip = {next_U[0] - guessed_U_exp.real(), next_U[1] - guessed_U_exp.imag()};
-
+        guessed_hip = {next_U[0] - guessed_U_exp.real(), next_U[1] - guessed_U_exp.imag()}; // next_U - guessed_U
     } else {
         throw std::runtime_error("The leg doesn't contact ground.");
     }//end if else
     
     // Return the result of the objective function
-    return guessed_hip - move_vec;
+    return {guessed_hip[0] - move_vec[0], guessed_hip[1] - move_vec[1]};
 }//end objective
 
 
 
-// int main() {
-//     LegModel legmodel(true);
 
-//     // Forward kinematics example
-//     std::cout << "****************************************\n";
-//     std::cout << "****** Forward kinematics example ******\n";
-//     std::cout << "****************************************\n";
+int main() {
+    LegModel legmodel(true);
+    double theta = M_PI * 130.0 / 180.0;
+    double beta =  M_PI * 50.0 / 180.0;
 
-//     // Single input
-//     std::cout << "==========Single Input==========\n";
-//     double theta = M_PI * 130.0 / 180.0;
-//     double beta =  M_PI * 50.0 / 180.0;
+    /* Forward kinematics */
+    std::cout << "****************************************\n";
+    std::cout << "****** Forward kinematics example ******\n";
+    std::cout << "****************************************\n";
+    auto start = std::chrono::high_resolution_clock::now();
+    for (int i=0; i<1000000; i++){
+        legmodel.forward(theta, beta);
+    }
+    auto end = std::chrono::high_resolution_clock::now();
+    // 計算執行時間，並轉換成毫秒
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    std::cout << "time: " << duration.count() << " ms" << std::endl;
+    std::cout << "Output G with single value input: (" << legmodel.G[0] << ", " << legmodel.G[1] << ")\n";
 
-//     auto start = std::chrono::high_resolution_clock::now();
-//     for (int i=0; i<1000000; i++){
-//         legmodel.forward(theta, beta);
-//     }
-//     auto end = std::chrono::high_resolution_clock::now();
-//     // 計算執行時間，並轉換成毫秒
-//     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-//     std::cout << "time: " << duration.count() << " ms" << std::endl;
+    // Note: The contact_map function and other advanced features are not fully implemented in this example.
+    /* Contact map */
+    legmodel.contact_map(theta, beta);
+    std::cout << "Output rim with single value input: " << legmodel.rim << std::endl;
+    std::cout << "Output alpha with single value input: " << legmodel.alpha << std::endl;
 
-
-//     std::cout << "Output G with single value input: (" << legmodel.G[0] << ", " << legmodel.G[1] << ")\n";
-
-//     // Note: The contact_map function and other advanced features are not fully implemented in this example.
-//     /* Contact map */
-//     legmodel.contact_map(theta, beta);
-//     std::cout << "Output rim with single value input: " << legmodel.rim << std::endl;
-//     std::cout << "Output alpha with single value input: " << legmodel.alpha << std::endl;
-
-//     /* Inverse kinematics */
-//     std::cout << "\n";
-//     std::cout << "****************************************" << std::endl;
-//     std::cout << "****** Inverse kinematics example ******" << std::endl;
-//     std::cout << "****************************************" << std::endl;
-//     // inverse for G
-//     std::cout << "==========Inverse for G==========" << std::endl;
-//     double G_p[2] = {0.05, -0.25};
-//     std::cout << "Input G: " << G_p[0] << ", " << G_p[1] << std::endl;
-//     legmodel.inverse(G_p, "G");
-//     std::cout << "Output theta, beta (degree): " << legmodel.theta*180.0/M_PI << ", "<< legmodel.beta*180.0/M_PI << std::endl;
-//     std::cout << "Output G: " << legmodel.G[0] << ", " << legmodel.G[1] << std::endl;
-//     // inverse for left upper rim
-//     std::cout << "==========Inverse for U_l==========" << std::endl;
-//     double Ul_p[2] = {-0.01, -0.015};
-//     std::cout << "Input U_l: " << Ul_p[0] << ", " << Ul_p[1] << std::endl;
-//     legmodel.inverse(Ul_p, "Ul");
-//     std::cout << "Output theta, beta (degree): " << legmodel.theta*180.0/M_PI << ", "<< legmodel.beta*180.0/M_PI << std::endl;
-//     std::cout << "Output U_l: " << legmodel.U_l[0] << ", " << legmodel.U_l[1] << std::endl;
-//     // inverse for right lower rim
-//     std::cout << "==========Inverse for L_r==========" << std::endl;
-//     double Lr_p[2] = {-0.01, -0.015};
-//     std::cout << "Input L_r: " << Lr_p[0] << ", " << Lr_p[1] << std::endl;
-//     legmodel.inverse(Lr_p, "Lr");
-//     std::cout << "Output theta, beta (degree): " << legmodel.theta*180.0/M_PI << ", "<< legmodel.beta*180.0/M_PI << std::endl;
-//     std::cout << "Output L_r: " << legmodel.L_r[0] << ", " << legmodel.L_r[1] << std::endl;
+    /* Inverse kinematics */
+    std::cout << "\n";
+    std::cout << "****************************************" << std::endl;
+    std::cout << "****** Inverse kinematics example ******" << std::endl;
+    std::cout << "****************************************" << std::endl;
+    // inverse for G
+    std::cout << "==========Inverse for G==========" << std::endl;
+    double G_p[2] = {0.05, -0.25};
+    std::cout << "Input G: " << G_p[0] << ", " << G_p[1] << std::endl;
+    legmodel.inverse(G_p, "G");
+    std::cout << "Output theta, beta (degree): " << legmodel.theta*180.0/M_PI << ", "<< legmodel.beta*180.0/M_PI << std::endl;
+    std::cout << "Output G: " << legmodel.G[0] << ", " << legmodel.G[1] << std::endl;
+    // inverse for left upper rim
+    std::cout << "==========Inverse for U_l==========" << std::endl;
+    double Ul_p[2] = {-0.01, -0.015};
+    std::cout << "Input U_l: " << Ul_p[0] << ", " << Ul_p[1] << std::endl;
+    legmodel.inverse(Ul_p, "Ul");
+    std::cout << "Output theta, beta (degree): " << legmodel.theta*180.0/M_PI << ", "<< legmodel.beta*180.0/M_PI << std::endl;
+    std::cout << "Output U_l: " << legmodel.U_l[0] << ", " << legmodel.U_l[1] << std::endl;
+    // inverse for right lower rim
+    std::cout << "==========Inverse for L_r==========" << std::endl;
+    double Lr_p[2] = {-0.01, -0.015};
+    std::cout << "Input L_r: " << Lr_p[0] << ", " << Lr_p[1] << std::endl;
+    legmodel.inverse(Lr_p, "Lr");
+    std::cout << "Output theta, beta (degree): " << legmodel.theta*180.0/M_PI << ", "<< legmodel.beta*180.0/M_PI << std::endl;
+    std::cout << "Output L_r: " << legmodel.L_r[0] << ", " << legmodel.L_r[1] << std::endl;
 
 
 
-//     // Eigen::VectorXd a(5);
-//     // Eigen::VectorXd b(5);
-//     // Eigen::VectorXd result(5);
-
-//     // // 初始化向量
-//     // a << 1.0, 2.0, 3.0, 4.0, 5.0;
-
-//     // b << 5.0, 4.0, 3.0, 2.0, 1.0;
-//     // a << 5.0, 2.0, 3.0, 4.0, 5.0;
-//     // std::cout << a ;
-
-
+    /* Move */
+    std::cout << "\n";
+    std::cout << "**************************" << std::endl;
+    std::cout << "****** Move example ******" << std::endl;
+    std::cout << "**************************" << std::endl;
+    std::array<double, 2> hip = {0.1, 0};
+    std::array<double, 2> desired_hip = {0.2, 0};
+    std::array<double, 2> new_theta_beta;
+    auto start = std::chrono::high_resolution_clock::now();
+    for (int i=0; i<10000; i++){
+        new_theta_beta = legmodel.move(theta, beta, {desired_hip[0]-hip[0], desired_hip[1]-hip[1]});
+    }
+    auto end = std::chrono::high_resolution_clock::now();
+    // 計算執行時間，並轉換成毫秒
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    std::cout << "time: " << duration.count() << " ms" << std::endl;
+    std::cout << "Use theta = " << new_theta_beta[0] << ", " << "beta = " << new_theta_beta[1] 
+            << "allows the leg to roll from (" << hip[0] << ", "  << hip[1] << ") to (" << desired_hip[0] << ", "  << desired_hip[1] << ") along the ground." << std::endl;
     
-//     auto start2 = std::chrono::high_resolution_clock::now();
-//     double angle;
-//     for (int i=0; i<10000000; i++){
-//         // angle = std::arg(std::complex<double>(1, 5) / std::complex<double>(0, -5));
-//         angle = std::atan2(5, 1) - std::atan2(-5, 0);
-//     }
-//     auto end2 = std::chrono::high_resolution_clock::now();
-//     // 計算執行時間，並轉換成毫秒
-//     auto duration2 = std::chrono::duration_cast<std::chrono::milliseconds>(end2 - start2);
-//     std::cout << "angle: " << angle  << ","<<std::atan2(5, 1) << ","<< std::atan2(-5, 0) << std::endl;
-//     std::cout << "time: " << duration2.count() << " ms" << std::endl;
 
+    // Eigen::VectorXd a(5);
+    // Eigen::VectorXd b(5);
+    // Eigen::VectorXd result(5);
 
-//     return 0;
-// }
+    // // 初始化向量
+    // a << 1.0, 2.0, 3.0, 4.0, 5.0;
+
+    // b << 5.0, 4.0, 3.0, 2.0, 1.0;
+    // a << 5.0, 2.0, 3.0, 4.0, 5.0;
+    // std::cout << a ;
+
+    return 0;
+}//end main
+
 
 // int objective(const gsl_vector *x, gsl_vector *f) {
 //     LegModel legmodel(true);
@@ -585,19 +611,12 @@ std::array<double, 2> LegModel::objective(const std::array<double, 2>& d_q, cons
 
 //     return 0;
 // }
-
-
-#include <iostream>
-#include <Eigen/Dense>
-#include <cmath>
-
 // 定义类型
 using Vector = Eigen::VectorXd;
 using Matrix = Eigen::MatrixXd;
-LegModel legmodel(true);
 
 // 定义目标函数 f(x)
-Vector objective(const Vector& x) {
+Eigen::Vector2d objective(const Vector& x) {
     double a = x[0], b = x[1];
     std::array<double, 2> d_q = {a, b};
     std::array<double, 2> q = {1, 0};
@@ -648,9 +667,15 @@ Vector newtonSolver(const Vector& initial_guess, double tol = 1e-7, size_t max_i
 
 // 主函数测试
 int main() {
+    LegModel legmodel(true);
     Vector initial_guess(2);
     initial_guess << 0.0, 0.0; // 初始值 (a, b) = (0, 0)
 
+    theta = np.deg2rad(50)
+    beta = np.deg2rad(40)
+    hip = np.array([0.1, 0])
+    desired_hip = np.array([0.2, 0])
+    legmodel.move();
     try {
         Vector solution = newtonSolver(initial_guess);
         std::cout << "Solution found:\n";
