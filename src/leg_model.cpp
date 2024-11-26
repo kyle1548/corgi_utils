@@ -5,15 +5,10 @@
 #include <vector>
 #include <array>
 #include <stdexcept>
-
-
-#include "../include/fitted_coefficient.hpp"
-#include <chrono>
 #include <Eigen/Dense>
-// #include <gsl/gsl_errno.h>
-// #include <gsl/gsl_multiroots.h>
-// #include <gsl/gsl_vector.h>
-// #include "fsolve.cpp"
+
+#include <chrono>
+#include "../include/fitted_coefficient.hpp"
 
 class LegModel {
     public:
