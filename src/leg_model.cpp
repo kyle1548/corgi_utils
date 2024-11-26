@@ -359,7 +359,7 @@ std::array<double, 2> LegModel::move(double theta_in, double beta_in, const std:
             Jac.col(i) = (cost_eps_vec - cost_vec) / epsilon;  // 数值差分计算导数
         }//end for
 
-        Eigen::Vector2d dq = Jac.partialPivLu().solve(-cost_vec);   // 解线性方程 Jac * dx = -cost_vec
+        Eigen::Vector2d dq = Jac.partialPivLu().solve(-cost_vec);   // 解线性方程 Jac * dq = -cost_vec
 
         if (dq.norm() < tol) {             // 判断步长是否足够小
             //std::cout << "Converged after " << iter << " iterations.\n";
