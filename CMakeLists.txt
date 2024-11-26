@@ -23,4 +23,5 @@ include_directories(
   ${CMAKE_CURRENT_LIST_DIR}
 )
 
+include_directories(include)
 add_subdirectory(src)

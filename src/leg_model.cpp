@@ -8,7 +8,7 @@
 #include <Eigen/Dense>
 
 #include <chrono>
-#include "../include/fitted_coefficient.hpp"
+#include "fitted_coefficient.hpp"
 
 class LegModel {
     public:
