@@ -1,4 +1,12 @@
+#include <iostream>
+#include <cmath>
+#include <stdexcept>
+#include <vector>
+#include <chrono>
+#include <Eigen/Dense>
+
 #include "leg_model.hpp"
+#include "fitted_coefficient.hpp"
 
 LegModel::LegModel(bool sim) {
     // Constants initialization

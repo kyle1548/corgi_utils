@@ -1,17 +1,8 @@
 #ifndef LEGMODEL_HPP
 #define LEGMODEL_HPP
 
-#include <iostream>
-#include <cmath>
-#include <complex>
-#include <vector>
 #include <array>
-#include <stdexcept>
-#include <Eigen/Dense>
-
-#include <chrono>
-#include "fitted_coefficient.hpp"
-
+#include <complex>
 
 class LegModel {
     public:
