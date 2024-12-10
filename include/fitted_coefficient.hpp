@@ -1,5 +1,5 @@
-#ifndef FittedCoefficient_HPP
-#define FittedCoefficient_HPP
+#ifndef FITTEDCOEFFICIENT_HPP
+#define FITTEDCOEFFICIENT_HPP
 
 #include <vector>
 #include <array>
@@ -113,4 +113,4 @@ const polynomial inv_G_dist_poly_deriv = inv_G_dist_poly.derivative();
 const polynomial inv_U_dist_poly_deriv = inv_U_dist_poly.derivative();
 const polynomial inv_L_dist_poly_deriv = inv_L_dist_poly.derivative();
 
-#endif // FittedCoefficient_HPP
+#endif // FITTEDCOEFFICIENT_HPP
