@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.8)
 set(CMAKE_C_COMPILER "/usr/bin/gcc")
 set(CMAKE_CXX_COMPILER "/usr/bin/g++")
 
-project(utils LANGUAGES C CXX)
+project(corgi_utils LANGUAGES C CXX)
 
 set (CMAKE_EXE_LINKER_FLAGS)
 set (CMAKE_CXX_STANDARD 17)
