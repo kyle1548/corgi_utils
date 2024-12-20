@@ -32,7 +32,7 @@ class LegModel {
         int rim = 3;    // 1 -> 2 -> 3 -> 4 -> 5 -> 0: 
                         // U_l -> L_l -> G -> L_r -> U_r -> None
         double alpha;
-        dounle height;
+        double height;
     private:
         // Joint Positions in complex
         std::complex<double> A_l_c, A_r_c, B_l_c, B_r_c, C_l_c, C_r_c, D_l_c, D_r_c, E_c, F_l_c, F_r_c, G_c, H_l_c, H_r_c, U_l_c, U_r_c, L_l_c, L_r_c;
