@@ -218,6 +218,7 @@ void LegModel::contact_map(double theta_in, double beta_in, double slope) {
 
         rim = min_index==5? 0 : min_index+1;
         alpha = arc_list[min_index][1];
+        height = arc_list[min_index][0];
 }//end contact_map
 
 std::array<double, 2> LegModel::arc_min(const std::complex<double>& p1, const std::complex<double>& p2, const std::complex<double>& O, const std::string& rim) {
