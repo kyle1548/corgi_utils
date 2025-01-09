@@ -160,13 +160,13 @@ void LegModel::contact_map(double theta_in, double beta_in, double slope) {
         std::complex<double> F_l_tmp = (F_l_c - U_l_c) / R * radius + U_l_c;
         std::complex<double> F_r_tmp = (F_r_c - U_r_c) / R * radius + U_r_c;
 
-        std::array<std::array<double, 2>, 6> arc_list = {
+        std::array<std::array<double, 3>, 6> arc_list = {
             this->arc_min(H_l_tmp, F_l_tmp, U_l_c, "left upper"),
             this->arc_min(F_l_tmp, G_l_tmp, L_l_c, "left lower"),
             this->arc_min(G_l_tmp, G_r_tmp, G_c, "G"),
             this->arc_min(G_r_tmp, F_r_tmp, L_r_c, "right lower"),
             this->arc_min(F_r_tmp, H_r_tmp, U_r_c, "right upper"),
-            {0.0, 0.0}
+            {0.0, 0.0, 0.0}
         };
 
         double min_value = arc_list[0][0];
@@ -180,13 +180,14 @@ void LegModel::contact_map(double theta_in, double beta_in, double slope) {
 
         rim = min_index==5? 0 : min_index+1;
         alpha = arc_list[min_index][1];
-        height = -arc_list[min_index][0];
+        contact_p = {arc_list[min_index][0], arc_list[min_index][2]};
 }//end contact_map
 
-std::array<double, 2> LegModel::arc_min(const std::complex<double>& p1, const std::complex<double>& p2, const std::complex<double>& O, const std::string& rim) {
+std::array<double, 3> LegModel::arc_min(const std::complex<double>& p1, const std::complex<double>& p2, const std::complex<double>& O, const std::string& rim) {
         using namespace std::complex_literals;
         double lowest_point = 0.0;
         double alpha = 0.0;
+        double contact_x = 0.0;
         double bias_alpha = 0.0;
 
         if (rim == "left upper") {
@@ -208,13 +209,15 @@ std::array<double, 2> LegModel::arc_min(const std::complex<double>& p1, const st
         if (in_range) {
             lowest_point = O.imag() - radius;
             alpha = std::arg(-1i / (p1 - O));
+            contact_x = O.real();
         } else {
             std::complex<double> smaller = (p1.imag() < p2.imag()) ? p1 : p2;
             lowest_point = 1.0; // Set to a large value if not normal contact
             alpha = std::arg((smaller - O) / (p1 - O));
+            contact_x = 0.0;  // set to 0 if not normal contact
         }//end if else
 
-        return {lowest_point, alpha + bias_alpha};
+        return {lowest_point, alpha + bias_alpha, contact_x};
 }//end arc_min
 
 // Note: The inverse and move functions require root-finding and numerical methods that are complex to implement.
