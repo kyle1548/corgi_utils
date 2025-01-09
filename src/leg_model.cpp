@@ -228,10 +228,10 @@ std::array<double, 2> LegModel::inverse(const double pos[2], const std::string &
     if (joint == "G"){
         theta = inv_G_dist_poly(abs_pos);
         beta = std::atan2(pos[1], pos[0]) - std::atan2(-abs_pos, 0);    // atan2(y, x)
-    } else if (joint == "Ul" || joint == "Ur"){
+    } else if (joint == "U_l" || joint == "U_r"){
         theta = inv_U_dist_poly(abs_pos);
         double U_x_beta0, U_y_beta0;
-        if (joint == "Ul"){
+        if (joint == "U_l"){
             U_x_beta0 = U_l_poly[0](theta);
             U_y_beta0 = U_l_poly[1](theta);
         } else {    // Ur
@@ -239,10 +239,10 @@ std::array<double, 2> LegModel::inverse(const double pos[2], const std::string &
             U_y_beta0 = U_r_poly[1](theta);    
         }//end if else
         beta = std::atan2(pos[1], pos[0]) - std::atan2(U_y_beta0, U_x_beta0);    // atan2(y, x)
-    } else if (joint == "Ll" || joint == "Lr"){
+    } else if (joint == "L_l" || joint == "L_r"){
         theta = inv_L_dist_poly(abs_pos);
         double L_x_beta0, L_y_beta0;
-        if (joint == "Ll"){
+        if (joint == "L_l"){
             L_x_beta0 = L_l_poly[0](theta);
             L_y_beta0 = L_l_poly[1](theta);
         } else {    // Lr
@@ -251,7 +251,7 @@ std::array<double, 2> LegModel::inverse(const double pos[2], const std::string &
         }//end if else            
         beta = std::atan2(pos[1], pos[0]) - std::atan2(L_y_beta0, L_x_beta0);    // atan2(y, x)
     } else {
-        throw std::runtime_error("joint needs to be 'G', 'Ul', 'Ur', 'Ll', or 'Lr'.");
+        throw std::runtime_error("joint needs to be 'G', 'U_l', 'U_r', 'L_l', or 'L_r'.");
     }//end if else
 
     return {theta, beta};
@@ -408,7 +408,8 @@ int main() {
     legmodel.contact_map(theta, beta);
     std::cout << "Output rim with single value input: " << legmodel.rim << std::endl;
     std::cout << "Output alpha with single value input: " << legmodel.alpha << std::endl;
-
+    std::cout << "Output contact_p with single value input: " << legmodel.contact_p[0] << ", " << legmodel.contact_p[1] << std::endl;
+    
     /* Inverse kinematics */
     std::cout << "\n";
     std::cout << "****************************************" << std::endl;
@@ -426,7 +427,7 @@ int main() {
     std::cout << "==========Inverse for U_l==========" << std::endl;
     double Ul_p[2] = {-0.01, -0.015};
     std::cout << "Input U_l: " << Ul_p[0] << ", " << Ul_p[1] << std::endl;
-    new_theta_beta = legmodel.inverse(Ul_p, "Ul");
+    new_theta_beta = legmodel.inverse(Ul_p, "U_l");
     legmodel.forward(new_theta_beta[0], new_theta_beta[1]);
     std::cout << "Output theta, beta (degree): " << new_theta_beta[0]*180.0/M_PI << ", "<< new_theta_beta[1]*180.0/M_PI << std::endl;
     std::cout << "Output U_l: " << legmodel.U_l[0] << ", " << legmodel.U_l[1] << std::endl;
@@ -434,7 +435,7 @@ int main() {
     std::cout << "==========Inverse for L_r==========" << std::endl;
     double Lr_p[2] = {-0.01, -0.015};
     std::cout << "Input L_r: " << Lr_p[0] << ", " << Lr_p[1] << std::endl;
-    new_theta_beta = legmodel.inverse(Lr_p, "Lr");
+    new_theta_beta = legmodel.inverse(Lr_p, "L_r");
     legmodel.forward(new_theta_beta[0], new_theta_beta[1]);
     std::cout << "Output theta, beta (degree): " << new_theta_beta[0]*180.0/M_PI << ", "<< new_theta_beta[1]*180.0/M_PI << std::endl;
     std::cout << "Output L_r: " << legmodel.L_r[0] << ", " << legmodel.L_r[1] << std::endl;
