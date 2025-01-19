@@ -15,7 +15,6 @@ class Bezier {
     private:
         std::vector<std::array<double, 2>> control_pts;
         std::vector<int> bz_cff;
-        double xy[2];
 
         int fact(int n);
         int comb(int n, int k);
